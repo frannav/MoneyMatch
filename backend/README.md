@@ -188,6 +188,11 @@ supabase db dump --local > backup.sql
 supabase migration new nombre_migracion
 ```
 
+### Push migraciones locales
+```bash
+supabase db push --local
+```
+
 ### Resetear Base de Datos
 
 ```bash
