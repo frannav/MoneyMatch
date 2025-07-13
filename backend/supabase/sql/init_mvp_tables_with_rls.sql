@@ -1,16 +1,15 @@
--- 1. Create users table: individual user accounts
-CREATE TABLE users (
-  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),  -- unique user identifier
-  email          TEXT NOT NULL UNIQUE,                       -- user email address
-  password_hash  TEXT NOT NULL,                              -- hashed password
-  name           TEXT,                                       -- optional display name
+-- 1. Create profiles table: individual user profiles referencing auth.users
+CREATE TABLE profiles (
+  id             UUID NOT NULL PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,  -- references Supabase auth.users
+  updated_at     TIMESTAMPTZ,                                -- last update timestamp
+  full_name      TEXT,                                       -- user display name
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()          -- record creation timestamp
 );
 
 -- 2. Create groups table: shared budgets for a group of users
 CREATE TABLE groups (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),  -- unique group identifier
-  name           TEXT NOT NULL,                               -- group name (e.g. “Alice & Bob”)
+  name           TEXT NOT NULL,                               -- group name (e.g. "Alice & Bob")
   global_budget  NUMERIC(12,2) NOT NULL,                      -- monthly shared budget
   currency       CHAR(3)      NOT NULL DEFAULT 'EUR',         -- currency code
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()           -- record creation timestamp
@@ -19,7 +18,7 @@ CREATE TABLE groups (
 -- 3. Create user_groups table: link users to groups with personal budgets
 CREATE TABLE user_groups (
   id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),  -- unique record id
-  user_id                   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,   -- linked user
+  user_id                   UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,   -- linked user
   group_id                  UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,  -- linked group
   discretionary_budget      NUMERIC(12,2) NOT NULL,                          -- personal budget within group
   discretionary_remaining   NUMERIC(12,2) NOT NULL,                          -- remaining personal budget
@@ -31,7 +30,7 @@ CREATE TABLE user_groups (
 CREATE TABLE expenses (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),  -- unique expense identifier
   group_id       UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,  -- associated group
-  user_id        UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,   -- who recorded this expense
+  user_id        UUID NOT NULL REFERENCES profiles(id) ON DELETE SET NULL,   -- who recorded this expense
   amount         NUMERIC(12,2) NOT NULL,                      -- expense amount
   is_shared      BOOLEAN    NOT NULL DEFAULT TRUE,            -- shared vs. private flag
   description    TEXT,                                        -- optional note
@@ -39,49 +38,49 @@ CREATE TABLE expenses (
 );
 
 -- ================================================================
--- Enable Row Level Security on each table (must be enabled for RLS to apply) :contentReference[oaicite:0]{index=0}
+-- Enable Row Level Security on each table
 -- ================================================================
-ALTER TABLE users        ENABLE ROW LEVEL SECURITY;            -- protect user records :contentReference[oaicite:1]{index=1}
-ALTER TABLE groups       ENABLE ROW LEVEL SECURITY;            -- protect group data :contentReference[oaicite:2]{index=2}
-ALTER TABLE user_groups  ENABLE ROW LEVEL SECURITY;            -- protect membership links :contentReference[oaicite:3]{index=3}
-ALTER TABLE expenses     ENABLE ROW LEVEL SECURITY;            -- protect expense records :contentReference[oaicite:4]{index=4}
+ALTER TABLE profiles     ENABLE ROW LEVEL SECURITY;            -- protect user profiles
+ALTER TABLE groups       ENABLE ROW LEVEL SECURITY;            -- protect group data
+ALTER TABLE user_groups  ENABLE ROW LEVEL SECURITY;            -- protect membership links
+ALTER TABLE expenses     ENABLE ROW LEVEL SECURITY;            -- protect expense records
 
 -- ================================================================
--- Policies for users table
--- Allow each authenticated user to view and modify only their own user record :contentReference[oaicite:5]{index=5}
+-- Policies for profiles table
+-- Allow each authenticated user to view and modify only their own profile
 -- ================================================================
--- SELECT: user can view their own record
+-- SELECT: user can view their own profile
 CREATE POLICY "Users can view own profile"
-  ON users
+  ON profiles
   FOR SELECT
   TO authenticated
-  USING ( auth.uid() = id );                                  -- only rows matching current user :contentReference[oaicite:6]{index=6}
+  USING ( (SELECT auth.uid()) = id );                         -- only rows matching current user
 
--- INSERT: user can create their own record
+-- INSERT: user can create their own profile
 CREATE POLICY "Users can insert own profile"
-  ON users
+  ON profiles
   FOR INSERT
   TO authenticated
-  WITH CHECK ( auth.uid() = id );                              -- ensure new row belongs to current user :contentReference[oaicite:7]{index=7}
+  WITH CHECK ( (SELECT auth.uid()) = id );                     -- ensure new row belongs to current user
 
--- UPDATE: user can update their own record
+-- UPDATE: user can update their own profile
 CREATE POLICY "Users can update own profile"
-  ON users
+  ON profiles
   FOR UPDATE
   TO authenticated
-  USING    ( auth.uid() = id )                                 -- allow update of owned rows :contentReference[oaicite:8]{index=8}
-  WITH CHECK( auth.uid() = id );                               -- ensure ownership remains after update :contentReference[oaicite:9]{index=9}
+  USING    ( (SELECT auth.uid()) = id )                        -- allow update of owned rows
+  WITH CHECK( (SELECT auth.uid()) = id );                      -- ensure ownership remains after update
 
--- DELETE: user can delete their own record
+-- DELETE: user can delete their own profile
 CREATE POLICY "Users can delete own profile"
-  ON users
+  ON profiles
   FOR DELETE
   TO authenticated
-  USING ( auth.uid() = id );                                   -- allow deletion of owned rows :contentReference[oaicite:10]{index=10}
+  USING ( (SELECT auth.uid()) = id );                          -- allow deletion of owned rows
 
 -- ================================================================
 -- Policies for groups table
--- Only members of a group may view or modify that group :contentReference[oaicite:11]{index=11}
+-- Only members of a group may view or modify that group
 -- ================================================================
 -- SELECT: authenticated users only see groups they belong to
 CREATE POLICY "Members can view groups"
@@ -89,15 +88,15 @@ CREATE POLICY "Members can view groups"
   FOR SELECT
   TO authenticated
   USING ( id IN (
-    SELECT group_id FROM user_groups WHERE user_id = auth.uid()
-  ));                                                          -- restrict to user’s groups :contentReference[oaicite:12]{index=12}
+    SELECT group_id FROM user_groups WHERE user_id = (SELECT auth.uid())
+  ));                                                          -- restrict to user's groups
 
 -- INSERT: user may create a new group if they become first member
 CREATE POLICY "Members can create groups"
   ON groups
   FOR INSERT
   TO authenticated
-  WITH CHECK ( TRUE );                                         -- allow any authenticated user to create :contentReference[oaicite:13]{index=13}
+  WITH CHECK ( TRUE );                                         -- allow any authenticated user to create
 
 -- UPDATE: only allow changing budget fields if member
 CREATE POLICY "Members can update groups"
@@ -105,11 +104,11 @@ CREATE POLICY "Members can update groups"
   FOR UPDATE
   TO authenticated
   USING ( id IN (
-    SELECT group_id FROM user_groups WHERE user_id = auth.uid()
+    SELECT group_id FROM user_groups WHERE user_id = (SELECT auth.uid())
   ))
   WITH CHECK ( id IN (
-    SELECT group_id FROM user_groups WHERE user_id = auth.uid()
-  ));                                                          -- ensure continued membership :contentReference[oaicite:14]{index=14}
+    SELECT group_id FROM user_groups WHERE user_id = (SELECT auth.uid())
+  ));                                                          -- ensure continued membership
 
 -- DELETE: only allow group deletion by members (could be restricted further later)
 CREATE POLICY "Members can delete groups"
@@ -117,45 +116,45 @@ CREATE POLICY "Members can delete groups"
   FOR DELETE
   TO authenticated
   USING ( id IN (
-    SELECT group_id FROM user_groups WHERE user_id = auth.uid()
-  ));                                                          -- restrict delete to group members :contentReference[oaicite:15]{index=15}
+    SELECT group_id FROM user_groups WHERE user_id = (SELECT auth.uid())
+  ));                                                          -- restrict delete to group members
 
 -- ================================================================
 -- Policies for user_groups table
--- Users can only manage their own membership link :contentReference[oaicite:16]{index=16}
+-- Users can only manage their own membership link
 -- ================================================================
 -- SELECT: view only own membership records
 CREATE POLICY "Users can view own membership"
   ON user_groups
   FOR SELECT
   TO authenticated
-  USING ( user_id = auth.uid() );                             -- only own rows :contentReference[oaicite:17]{index=17}
+  USING ( user_id = (SELECT auth.uid()) );                    -- only own rows
 
 -- INSERT: allow joining a group
 CREATE POLICY "Users can insert membership"
   ON user_groups
   FOR INSERT
   TO authenticated
-  WITH CHECK ( user_id = auth.uid() );                         -- ensure membership row belongs to user :contentReference[oaicite:18]{index=18}
+  WITH CHECK ( user_id = (SELECT auth.uid()) );                -- ensure membership row belongs to user
 
 -- UPDATE: allow updating only own discretionary values
 CREATE POLICY "Users can update own membership"
   ON user_groups
   FOR UPDATE
   TO authenticated
-  USING ( user_id = auth.uid() )
-  WITH CHECK ( user_id = auth.uid() );                         -- cannot modify others’ membership :contentReference[oaicite:19]{index=19}
+  USING ( user_id = (SELECT auth.uid()) )
+  WITH CHECK ( user_id = (SELECT auth.uid()) );                -- cannot modify others' membership
 
 -- DELETE: allow leaving a group
 CREATE POLICY "Users can delete own membership"
   ON user_groups
   FOR DELETE
   TO authenticated
-  USING ( user_id = auth.uid() );                             -- can only remove own link :contentReference[oaicite:20]{index=20}
+  USING ( user_id = (SELECT auth.uid()) );                    -- can only remove own link
 
 -- ================================================================
 -- Policies for expenses table
--- Only group members can view or manage expenses in their group :contentReference[oaicite:21]{index=21}
+-- Only group members can view or manage expenses in their group
 -- ================================================================
 -- SELECT: view expenses if user is member of that group
 CREATE POLICY "Members can view expenses"
@@ -163,8 +162,8 @@ CREATE POLICY "Members can view expenses"
   FOR SELECT
   TO authenticated
   USING ( group_id IN (
-    SELECT group_id FROM user_groups WHERE user_id = auth.uid()
-  ));                                                          -- ensure group membership :contentReference[oaicite:22]{index=22}
+    SELECT group_id FROM user_groups WHERE user_id = (SELECT auth.uid())
+  ));                                                          -- ensure group membership
 
 -- INSERT: allow inserting expense if user belongs to group and records own user_id
 CREATE POLICY "Members can insert expenses"
@@ -172,9 +171,9 @@ CREATE POLICY "Members can insert expenses"
   FOR INSERT
   TO authenticated
   WITH CHECK (
-    user_id = auth.uid()                                      -- expense must be recorded by this user :contentReference[oaicite:23]{index=23}
-    AND group_id IN (SELECT group_id FROM user_groups WHERE user_id = auth.uid())
-  );                                                           -- ensure group membership :contentReference[oaicite:24]{index=24}
+    user_id = (SELECT auth.uid())                              -- expense must be recorded by this user
+    AND group_id IN (SELECT group_id FROM user_groups WHERE user_id = (SELECT auth.uid()))
+  );                                                           -- ensure group membership
 
 -- UPDATE: allow updating only expenses they created in their groups
 CREATE POLICY "Members can update expenses"
@@ -182,11 +181,11 @@ CREATE POLICY "Members can update expenses"
   FOR UPDATE
   TO authenticated
   USING (
-    user_id = auth.uid()
-    AND group_id IN (SELECT group_id FROM user_groups WHERE user_id = auth.uid())
+    user_id = (SELECT auth.uid())
+    AND group_id IN (SELECT group_id FROM user_groups WHERE user_id = (SELECT auth.uid()))
   )
   WITH CHECK (
-    user_id = auth.uid()                                      -- cannot reassign expense to another user :contentReference[oaicite:25]{index=25}
+    user_id = (SELECT auth.uid())                              -- cannot reassign expense to another user
   );
 
 -- DELETE: allow deleting only expenses they created in their groups
@@ -195,6 +194,24 @@ CREATE POLICY "Members can delete expenses"
   FOR DELETE
   TO authenticated
   USING (
-    user_id = auth.uid()
-    AND group_id IN (SELECT group_id FROM user_groups WHERE user_id = auth.uid())
-  );                                                           -- restrict deletes to own expenses :contentReference[oaicite:26]{index=26}
+    user_id = (SELECT auth.uid())
+    AND group_id IN (SELECT group_id FROM user_groups WHERE user_id = (SELECT auth.uid()))
+  );                                                           -- restrict deletes to own expenses
+
+-- ================================================================
+-- Trigger to automatically create a profile when a new user signs up via Supabase Auth
+-- ================================================================
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+SET search_path = ''
+AS $$
+BEGIN
+  INSERT INTO public.profiles (id, full_name)
+  VALUES (new.id, new.raw_user_meta_data->>'full_name');
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
