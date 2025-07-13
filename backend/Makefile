@@ -49,9 +49,10 @@ db-rollback: ## Revertir última migración
 	@echo "⏪ Revirtiendo última migración..."
 	cd $(SUPABASE_DIR) && supabase migration down
 
-db-seed: ## Ejecutar seeds de datos de prueba
-	@echo "🌱 Ejecutando seeds..."
-	cd $(SUPABASE_DIR) && supabase db seed
+db-seed-db: ## Ejecutar seeds de datos de prueba
+	@echo "🌱 Ejecutando seed de usuarios y datos de prueba..."
+	pnpm run seed-db
+	@echo "✅ Seed de usuarios ejecutado"
 
 db-init-mvp-from-migrations: ## Inicializar tablas MVP desde migraciones
 	@echo "Reseteando base de datos..."
@@ -108,3 +109,10 @@ check: ## Verificar configuración del proyecto
 	@test -d $(SUPABASE_DIR)/migrations || { echo "❌ Directorio migrations no encontrado"; exit 1; }
 	@echo "✅ Migraciones: OK"
 	@echo "🎉 Proyecto configurado correctamente"
+
+db-init-and-seed: ## Inicializar tablas MVP desde migraciones y ejecutar seed de datos de prueba
+	@echo "🌱 Inicializando tablas MVP desde migraciones..."
+	make db-init-mvp-from-migrations
+	@echo "🌱 Ejecutando seed de datos de prueba..."
+	make db-seed-db
+	@echo "✅ Inicialización y seed completados"
