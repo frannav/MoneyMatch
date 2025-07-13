@@ -10,10 +10,7 @@ MoneyMatch es una aplicación de gestión de presupuestos compartidos que permit
 
 El proyecto utiliza PostgreSQL a través de Supabase con las siguientes tablas principales:
 
-- **`users`**: Cuentas individuales de usuarios
-- **`groups`**: Presupuestos compartidos para grupos de usuarios
-- **`user_groups`**: Relación entre usuarios y grupos con presupuestos discrecionales
-- **`expenses`**: Registros de gastos (compartidos o privados)
+TO-DO
 
 ### Seguridad
 
@@ -42,14 +39,7 @@ El proyecto utiliza PostgreSQL a través de Supabase con las siguientes tablas p
 
 ## 📁 Estructura del Proyecto
 
-```
-backend/
-├── supabase/
-│   ├── config.toml          # Configuración de Supabase
-│   └── sql/
-│       └── v1.sql           # Schema inicial de la base de datos
-└── README.md
-```
+TO-DO
 
 ## 🛠️ Configuración Local
 
@@ -88,55 +78,13 @@ Una vez iniciado el entorno local, tendrás acceso a:
 
 ### Tablas Principales
 
-#### Users
-```sql
-- id: UUID (Primary Key)
-- email: TEXT (Unique)
-- password_hash: TEXT
-- name: TEXT (Optional)
-- created_at: TIMESTAMPTZ
-```
-
-#### Groups
-```sql
-- id: UUID (Primary Key)
-- name: TEXT
-- global_budget: NUMERIC(12,2)
-- currency: CHAR(3)
-- created_at: TIMESTAMPTZ
-```
-
-#### User_Groups
-```sql
-- id: UUID (Primary Key)
-- user_id: UUID (Foreign Key)
-- group_id: UUID (Foreign Key)
-- discretionary_budget: NUMERIC(12,2)
-- discretionary_remaining: NUMERIC(12,2)
-- created_at: TIMESTAMPTZ
-```
-
-#### Expenses
-```sql
-- id: UUID (Primary Key)
-- group_id: UUID (Foreign Key)
-- user_id: UUID (Foreign Key)
-- amount: NUMERIC(12,2)
-- is_shared: BOOLEAN
-- description: TEXT
-- created_at: TIMESTAMPTZ
-```
+TO-DO
 
 ## 🔐 Seguridad
 
 ### Row Level Security (RLS)
 
-Todas las tablas implementan RLS con políticas específicas:
-
-- **Users**: Solo pueden ver y modificar sus propios registros
-- **Groups**: Solo los miembros pueden ver y modificar grupos
-- **User_Groups**: Los usuarios solo pueden gestionar su propia membresía
-- **Expenses**: Solo los miembros del grupo pueden ver y gestionar gastos
+TO-DO
 
 ### Autenticación
 
@@ -149,12 +97,7 @@ Todas las tablas implementan RLS con políticas específicas:
 
 ### Variables de Entorno
 
-Las siguientes variables de entorno pueden ser configuradas:
-
-```bash
-OPENAI_API_KEY=your_openai_key_here
-SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN=your_twilio_token
-```
+// TO-DO .env y .env.example
 
 ### Configuración de Email
 
@@ -168,10 +111,10 @@ El sistema incluye un servidor de testing de emails (Inbucket) para desarrollo l
 supabase db reset
 ```
 
-### Generar Tipos TypeScript
+### Generar Tipos Swift
 
 ```bash
-supabase gen types typescript --local > database.types.ts
+supabase gen types --local --lang=swift > database.types.swift
 ```
 
 ### Hacer Backup
