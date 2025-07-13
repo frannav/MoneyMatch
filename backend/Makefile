@@ -1,0 +1,111 @@
+# MoneyMatch Backend - Makefile
+# Comandos útiles para desarrollo con Supabase
+
+.PHONY: help install start stop restart status reset logs db-reset db-migrate db-rollback db-seed types clean check
+
+# Variables
+SUPABASE_DIR = ./supabase
+
+# Comando por defecto
+help: ## Mostrar ayuda
+	@echo "MoneyMatch Backend - Comandos disponibles:"
+	@echo ""
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+# === CONFIGURACIÓN INICIAL ===
+install: ## Instalar dependencias y configurar proyecto
+	@echo "🔧 Configurando proyecto..."
+	@supabase --version || { echo "❌ Supabase CLI no está instalado. Instálalo con: npm install -g supabase"; exit 1; }
+	@echo "✅ Supabase CLI encontrado"
+	@echo "🚀 Proyecto configurado correctamente"
+
+# === SERVICIOS LOCALES ===
+start: ## Iniciar servicios locales de Supabase
+	@echo "🚀 Iniciando servicios locales de Supabase..."
+	cd $(SUPABASE_DIR) && supabase start
+
+stop: ## Detener servicios locales de Supabase
+	@echo "🛑 Deteniendo servicios locales de Supabase..."
+	cd $(SUPABASE_DIR) && supabase stop
+
+restart: ## Reiniciar servicios locales de Supabase
+	@echo "🔄 Reiniciando servicios locales de Supabase..."
+	cd $(SUPABASE_DIR) && supabase stop && supabase start
+
+status: ## Mostrar estado de los servicios
+	@echo "📊 Estado de los servicios:"
+	cd $(SUPABASE_DIR) && supabase status
+
+# === BASE DE DATOS ===
+db-reset: ## Resetear base de datos local
+	@echo "🗑️  Reseteando base de datos local..."
+	cd $(SUPABASE_DIR) && supabase db reset
+
+db-migrate: ## Aplicar migraciones pendientes
+	@echo "🔄 Aplicando migraciones..."
+	cd $(SUPABASE_DIR) && supabase migration up
+
+db-rollback: ## Revertir última migración
+	@echo "⏪ Revirtiendo última migración..."
+	cd $(SUPABASE_DIR) && supabase migration down
+
+db-seed: ## Ejecutar seeds de datos de prueba
+	@echo "🌱 Ejecutando seeds..."
+	cd $(SUPABASE_DIR) && supabase db seed
+
+db-init-mvp: ## Inicializar tablas MVP con RLS
+	@echo "🏗️  Inicializando tablas MVP con RLS..."
+	cd $(SUPABASE_DIR) && supabase db reset --with-seed-sql=./sql/init_mvp_tables_with_rls.sql
+
+db-init-mvp-no-rls: ## Inicializar tablas MVP sin RLS (para testing)
+	@echo "🧪 Inicializando tablas MVP sin RLS (testing)..."
+	cd $(SUPABASE_DIR) && supabase db reset --with-seed-sql=./sql/init_mvp_tables_without_rls.sql
+
+# === MIGRACIONES ===
+migration-new: ## Crear nueva migración (usar: make migration-new name=nombre_migracion)
+	@if [ -z "$(name)" ]; then \
+		echo "❌ Error: Especifica el nombre de la migración"; \
+		echo "Uso: make migration-new name=nombre_migracion"; \
+		exit 1; \
+	fi
+	@echo "📝 Creando nueva migración: $(name)"
+	cd $(SUPABASE_DIR) && supabase migration new $(name)
+
+migration-diff: ## Generar migración desde diferencias en schema
+	@echo "🔍 Generando migración desde diferencias..."
+	cd $(SUPABASE_DIR) && supabase db diff --schema public
+
+# === TIPOS Y CÓDIGO ===
+types: ## Generar tipos Swift
+	@echo "🔧 Generando tipos..."
+	cd $(SUPABASE_DIR) && supabase gen types --local --lang=swift > database.types.swift
+	@echo "✅ Tipos generados en database.types.swift"
+
+# === DESARROLLO ===
+logs: ## Mostrar logs de servicios locales
+	@echo "📋 Mostrando logs..."
+	cd $(SUPABASE_DIR) && supabase logs
+
+# === LIMPIEZA ===
+clean: ## Limpiar archivos temporales
+	@echo "🧹 Limpiando archivos temporales..."
+	cd $(SUPABASE_DIR) && rm -rf .temp/*
+	@echo "✅ Limpieza completada"
+
+reset: ## Reset completo del proyecto
+	@echo "🔄 Realizando reset completo del proyecto..."
+	cd $(SUPABASE_DIR) && supabase stop
+	cd $(SUPABASE_DIR) && supabase db reset
+	cd $(SUPABASE_DIR) && supabase start
+	@echo "✅ Reset completo terminado"
+
+# === VALIDACIÓN ===
+check: ## Verificar configuración del proyecto
+	@echo "✅ Verificando configuración..."
+	@supabase --version || { echo "❌ Supabase CLI no instalado"; exit 1; }
+	@echo "✅ Supabase CLI: OK"
+	@test -f $(SUPABASE_DIR)/config.toml || { echo "❌ config.toml no encontrado"; exit 1; }
+	@echo "✅ Configuración: OK"
+	@test -d $(SUPABASE_DIR)/migrations || { echo "❌ Directorio migrations no encontrado"; exit 1; }
+	@echo "✅ Migraciones: OK"
+	@echo "🎉 Proyecto configurado correctamente"
