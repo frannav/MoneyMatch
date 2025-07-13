@@ -53,13 +53,12 @@ db-seed: ## Ejecutar seeds de datos de prueba
 	@echo "🌱 Ejecutando seeds..."
 	cd $(SUPABASE_DIR) && supabase db seed
 
-db-init-mvp: ## Inicializar tablas MVP con RLS
-	@echo "🏗️  Inicializando tablas MVP con RLS..."
-	cd $(SUPABASE_DIR) && supabase db reset --with-seed-sql=./sql/init_mvp_tables_with_rls.sql
-
-db-init-mvp-no-rls: ## Inicializar tablas MVP sin RLS (para testing)
-	@echo "🧪 Inicializando tablas MVP sin RLS (testing)..."
-	cd $(SUPABASE_DIR) && supabase db reset --with-seed-sql=./sql/init_mvp_tables_without_rls.sql
+db-init-mvp-from-migrations: ## Inicializar tablas MVP desde migraciones
+	@echo "Reseteando base de datos..."
+	cd $(SUPABASE_DIR) && supabase db reset
+	@echo "💃 Iniciando tablas MVP con RLS..."
+	cd $(SUPABASE_DIR) && supabase db push --local
+	@echo "✅ Inicialización completada"
 
 # === MIGRACIONES ===
 migration-new: ## Crear nueva migración (usar: make migration-new name=nombre_migracion)
