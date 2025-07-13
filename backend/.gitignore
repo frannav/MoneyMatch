@@ -1,0 +1,7 @@
+supabase/.temp
+supabase/.env
+
+build/
+
+node_modules/
+pnpm-lock.yaml
